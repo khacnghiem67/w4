@@ -1,13 +1,11 @@
 import { notEmptyString, useField, useForm } from "@shopify/react-form";
 import React, { useCallback, useState } from 'react';
-import { useEffect } from "react";
-import { useAppQuery } from '../hooks'
+import { useAppQuery } from '../hooks';
 
 export const PricingRulesObject = React.createContext()
 
 function PricingRules({ children }) {
-    const [collections, setCollections] = useState([])
-    const [tags, setTags] = useState([])
+    const [products, setProducts] = useState([])
 
     const onSubmit = useCallback(
         // (body) => {
@@ -41,17 +39,30 @@ function PricingRules({ children }) {
         // },
         // [QRCode, setQRCode]
         (body) => {
+            const parsedBody = body;
+            // parsedBody.destination = parsedBody.destination[0];
+            console.log(parsedBody);
             return { status: 'fail', errors: [{ message: 'bad form data' }] };
         }, []
     );
 
-    const { data } = useAppQuery({
-        url: '/api/collections', reactQueryOptions: {
-            onSuccess: () => {
-                console.log('success');
+    // useAppQuery({
+    //     url: '/api/collections', reactQueryOptions: {
+    //         onSuccess: (data) => {
+    //             console.log('success');
+    //             setCollections(data.collections.edges.map(edge => edge.node));
+    //         },
+    //     },
+    // });
+
+    useAppQuery({
+        url: '/api/products', reactQueryOptions: {
+            onSuccess: (data) => {
+                setProducts(data.products.edges.map(edge => edge.node));
             },
         },
     });
+
 
     const {
         fields: {
@@ -82,7 +93,13 @@ function PricingRules({ children }) {
             }),
             status: useField("1"),
             // apply products
-            optionProducts: useField(['1']),
+            optionProducts: useField({
+                value: { value: ['1'], values: [] },
+                validates: (option) => {
+                    console.log(option);
+                    if (option.values.length <= 0) return 'Please select option'
+                }
+            }),
             // custom prices
             amount: useField({
                 value: '0',
@@ -98,6 +115,7 @@ function PricingRules({ children }) {
 
     return (
         <PricingRulesObject.Provider value={{
+            products,
             name,
             priority,
             status,
@@ -112,5 +130,6 @@ function PricingRules({ children }) {
         }}>{children}</PricingRulesObject.Provider>
     )
 }
+
 
 export default PricingRules

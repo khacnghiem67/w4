@@ -17,36 +17,58 @@ import {
   formatQrCodeResponse,
 } from "../helpers/qr-codes.js";
 
-const DISCOUNTS_QUERY = `
-  query discounts($first: Int!) {
-    codeDiscountNodes(first: $first) {
+const NUM = 15;
+
+const PRODUCTS_QUERY = `
+ {
+    products(first: 10) {
       edges {
         node {
           id
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              codes(first: 1) {
-                edges {
-                  node {
-                    code
-                  }
-                }
+          title
+          tags
+          images(first: 1) {
+            edges {
+              node {
+                id
+                url
               }
             }
-            ... on DiscountCodeBxgy {
-              codes(first: 1) {
-                edges {
-                  node {
-                    code
-                  }
-                }
-              }
+          }
+          collections(first: 10) {
+            nodes {
+              id
             }
-            ... on DiscountCodeFreeShipping {
-              codes(first: 1) {
-                edges {
-                  node {
-                    code
+          }
+        }
+      }
+    }
+  }
+`;
+
+const COLLECTIONS_QUERY = `
+  {
+    collections(first: 10) {
+      edges {
+        node {
+          id
+          title
+          image {
+            id
+            url
+          }
+          products(first: 10) {
+            edges {
+              node {
+                id
+                title
+                tags
+                images(first: 1) {
+                  edges {
+                    node {
+                      id
+                      url
+                    }
                   }
                 }
               }
@@ -58,32 +80,72 @@ const DISCOUNTS_QUERY = `
   }
 `;
 
+const TAGS_QUERY = `
+  {
+    shop {
+      productTags(first: 10) {
+        edges {
+          node
+        }
+      }
+    }
+  }
+`;
+
 export default function applyPricingRulesApiEndpoints(app) {
   app.use(express.json());
 
-
-
-  // test
-  app.get("/api/collections", async (_req, res) => {
+  // products
+  app.get("/api/products", async (_req, res) => {
     const client = new shopify.api.clients.Graphql({
       session: res.locals.shopify.session,
     });
 
-    /* Fetch all available discounts to list in the QR code form */
-    const discounts = await client.query({
+    const products = await client.query({
       data: {
-        query: DISCOUNTS_QUERY,
+        query: PRODUCTS_QUERY,
         variables: {
           first: 25,
         },
       },
     });
 
-    res.send(discounts.body.data);
-    
-    const countData = await shopify.api.rest.Product.count({
+    res.send(products.body.data);
+  });
+
+  // collections
+  app.get("/api/collections", async (_req, res) => {
+    const client = new shopify.api.clients.Graphql({
       session: res.locals.shopify.session,
     });
-    res.status(200).send(countData);
+
+    const collections = await client.query({
+      data: {
+        query: COLLECTIONS_QUERY,
+        variables: {
+          first: 25,
+        },
+      },
+    });
+
+    res.send(collections.body.data);
+  });
+
+  // collections
+  app.get("/api/tags", async (_req, res) => {
+    const client = new shopify.api.clients.Graphql({
+      session: res.locals.shopify.session,
+    });
+
+    const tags = await client.query({
+      data: {
+        query: TAGS_QUERY,
+        variables: {
+          first: 25,
+        },
+      },
+    });
+
+    res.send(tags.body.data);
   });
 }

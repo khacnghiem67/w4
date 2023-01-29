@@ -1,8 +1,9 @@
 import { ResourcePicker } from '@shopify/app-bridge-react';
 import { Autocomplete, Avatar, Button, Card, ChoiceList, Icon, Stack, Tag, TextField } from "@shopify/polaris";
 import { CirclePlusMinor, MobileCancelMajor } from '@shopify/polaris-icons';
-import React, { useCallback, useContext, useState } from 'react';
+import React, { useCallback, useContext, useState, useMemo } from 'react';
 import { PricingRulesObject } from '../../contexts/PricingRules';
+import { useAppQuery } from '../../hooks';
 
 function ApplyProducts() {
     const [showResourcePickerProducts, setShowResourcePickerProducts] = useState(false);
@@ -19,6 +20,7 @@ function ApplyProducts() {
             <ChoiceList
                 title="Options"
                 titleHidden
+                error={optionProducts.error}
                 choices={[
                     { label: "All products", value: "1" },
                     {
@@ -57,80 +59,44 @@ function ApplyProducts() {
                             ),
                     },
                 ]}
-                selected={optionProducts.value}
-                onChange={optionProducts.onChange}
+                selected={optionProducts.value.value}
+                onChange={(value) => optionProducts.onChange({ value, values: [] })}
             />
         </Card>
     )
 }
 
 const ProductCollections = () => {
-    const paginationInterval = 25;
-    const deselectedOptions = Array.from(Array(100)).map((_, index) => ({
-        value: `rustic ${index + 1}`,
-        label: `Rustic ${index + 1}`,
-    }));
-
-    const [selectedOptions, setSelectedOptions] = useState([]);
+    const { optionProducts } = useContext(PricingRulesObject);
+    const [collections, setCollections] = useState([]);
+    const [initCollections, setInitCollections] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [inputValue, setInputValue] = useState('');
-    const [options, setOptions] = useState(deselectedOptions);
-    const [isLoading, setIsLoading] = useState(false);
-    const [willLoadMoreResults, setWillLoadMoreResults] = useState(true);
-    const [visibleOptionIndex, setVisibleOptionIndex] =
-        useState(paginationInterval);
 
-    const handleLoadMoreResults = useCallback(() => {
-        if (willLoadMoreResults) {
-            setIsLoading(true);
-
-            setTimeout(() => {
-                const remainingOptionCount = options.length - visibleOptionIndex;
-                const nextVisibleOptionIndex =
-                    remainingOptionCount >= paginationInterval
-                        ? visibleOptionIndex + paginationInterval
-                        : visibleOptionIndex + remainingOptionCount;
-
-                setIsLoading(false);
-                setVisibleOptionIndex(nextVisibleOptionIndex);
-
-                if (remainingOptionCount <= paginationInterval) {
-                    setWillLoadMoreResults(false);
-                }
-            }, 1000);
-        }
-    }, [willLoadMoreResults, visibleOptionIndex, options.length]);
-
-    const removeTag = useCallback(
-        (tag) => () => {
-            const options = [...selectedOptions];
-            options.splice(options.indexOf(tag), 1);
-            setSelectedOptions(options);
+    useAppQuery({
+        url: '/api/collections', reactQueryOptions: {
+            onSuccess: (data) => {
+                console.log('success');
+                setIsLoading(false)
+                setCollections(data.collections.edges.map(edge => edge.node));
+                setInitCollections(data.collections.edges.map(edge => edge.node))
+            },
         },
-        [selectedOptions],
-    );
+    });
 
     const updateText = useCallback(
         (value) => {
             setInputValue(value);
 
             if (value === '') {
-                setOptions(deselectedOptions);
+                setCollections(initCollections);
                 return;
             }
 
             const filterRegex = new RegExp(value, 'i');
-            const resultOptions = deselectedOptions.filter((option) =>
-                option.label.match(filterRegex),
-            );
-
-            let endIndex = resultOptions.length - 1;
-            if (resultOptions.length === 0) {
-                endIndex = 0;
-            }
-            setOptions(resultOptions);
-            setInputValue;
+            setCollections(initCollections.filter(collection => collection.title.match(filterRegex)))
         },
-        [deselectedOptions],
+        [],
     );
 
     const textField = (
@@ -142,171 +108,132 @@ const ProductCollections = () => {
             placeholder="Vintage, cotton, summer"
         />
     );
-
-    const hasSelectedOptions = selectedOptions.length > 0;
-
-    const tagsMarkup = hasSelectedOptions
-        ? selectedOptions.map((option) => {
-            let tagLabel = '';
-            tagLabel = option.replace('_', ' ');
-            tagLabel = titleCase(tagLabel);
-            return (
-                <Tag key={`option${option}`} onRemove={removeTag(option)}>
-                    {tagLabel}
-                </Tag>
-            );
-        })
-        : null;
-    const optionList = options.slice(0, visibleOptionIndex);
-    const selectedTagMarkup = hasSelectedOptions ? (
-        <Stack spacing="extraTight">{tagsMarkup}</Stack>
-    ) : null;
 
     return (
         <Stack vertical>
             <Autocomplete
                 allowMultiple
-                options={optionList}
-                selected={selectedOptions}
+                options={collections.map(collection => ({ value: collection.id, label: collection.title }))}
+                selected={optionProducts.value.values}
                 textField={textField}
-                onSelect={setSelectedOptions}
-                listTitle="Suggested Collections"
                 loading={isLoading}
-                onLoadMoreResults={handleLoadMoreResults}
-                willLoadMoreResults={willLoadMoreResults}
+                onSelect={(value) => {
+                    console.log(value)
+                    optionProducts.onChange({ ...optionProducts.value, values: value })
+                }}
+                listTitle="Suggested Collections"
             />
-            {[1].map(col => <Stack alignment="center" distribution="fillEvenly">
-                <Stack.Item>
-                    <Stack alignment="center">
-                        <Avatar name="Shop One" shape="square" />
-                        <p>
-                            Add variants if this product
-                        </p>
-                    </Stack>
-                </Stack.Item>
-                <Stack.Item>
-                    <Stack distribution='trailing'>
-                        <Button plain>
-                            <Icon source={MobileCancelMajor} color="subdued" />
-                        </Button>
-                    </Stack>
-                </Stack.Item>
-            </Stack>)}
+            {optionProducts.value.values.map(id => {
+                const collection = collections.find(col => col.id === id)
+
+                return <Stack alignment="center" distribution="fillEvenly" key={id}>
+                    <Stack.Item>
+                        <Stack alignment="center">
+                            <Avatar name="Shop One" shape="square" source={collection?.image?.url} />
+                            <p>
+                                {collection?.title}
+                            </p>
+                        </Stack>
+                    </Stack.Item>
+                    <Stack.Item>
+                        <Stack distribution='trailing'>
+                            <Button plain onClick={() => optionProducts.onChange({ ...optionProducts.value, values: optionProducts.value.values.filter(optionId => optionId !== id) })}>
+                                <Icon source={MobileCancelMajor} color="subdued" />
+                            </Button>
+                        </Stack>
+                    </Stack.Item>
+                </Stack>
+            })}
         </Stack>
     );
-
-    function titleCase(string) {
-        return string
-            .toLowerCase()
-            .split(' ')
-            .map((word) => {
-                return word.replace(word[0], word[0].toUpperCase());
-            })
-            .join(' ');
-    }
 }
 
+
 const ProductTags = () => {
-    const paginationInterval = 25;
-    const deselectedOptions = Array.from(Array(100)).map((_, index) => ({
-        value: `rustic ${index + 1}`,
-        label: `Rustic ${index + 1}`,
-    }));
+    const { optionProducts } = useContext(PricingRulesObject);
+    const [tags, setTags] = useState([]);
+    const [initTags, setInitTags] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const [selectedOptions, setSelectedOptions] = useState([]);
     const [inputValue, setInputValue] = useState('');
-    const [options, setOptions] = useState(deselectedOptions);
-    const [isLoading, setIsLoading] = useState(false);
-    const [willLoadMoreResults, setWillLoadMoreResults] = useState(true);
-    const [visibleOptionIndex, setVisibleOptionIndex] =
-        useState(paginationInterval);
 
-    const handleLoadMoreResults = useCallback(() => {
-        if (willLoadMoreResults) {
-            setIsLoading(true);
-
-            setTimeout(() => {
-                const remainingOptionCount = options.length - visibleOptionIndex;
-                const nextVisibleOptionIndex =
-                    remainingOptionCount >= paginationInterval
-                        ? visibleOptionIndex + paginationInterval
-                        : visibleOptionIndex + remainingOptionCount;
-
-                setIsLoading(false);
-                setVisibleOptionIndex(nextVisibleOptionIndex);
-
-                if (remainingOptionCount <= paginationInterval) {
-                    setWillLoadMoreResults(false);
-                }
-            }, 1000);
-        }
-    }, [willLoadMoreResults, visibleOptionIndex, options.length]);
-
-    const removeTag = useCallback(
-        (tag) => () => {
-            const options = [...selectedOptions];
-            options.splice(options.indexOf(tag), 1);
-            setSelectedOptions(options);
+    useAppQuery({
+        url: '/api/tags', reactQueryOptions: {
+            onSuccess: (data) => {
+                console.log('success');
+                console.log(data);
+                setIsLoading(false)
+                setTags(data.shop.productTags.edges.map(edge => edge.node));
+                setInitTags(data.shop.productTags.edges.map(edge => edge.node))
+            },
         },
-        [selectedOptions],
-    );
+    });
 
-    const updateText = useCallback(
-        (value) => {
-            setInputValue(value);
+    // const removeTag = useCallback(
+    //     (tag) => () => {
+    //         const options = [...selectedOptions];
+    //         options.splice(options.indexOf(tag), 1);
+    //         setSelectedOptions(options);
+    //     },
+    //     [selectedOptions],
+    // );
 
-            if (value === '') {
-                setOptions(deselectedOptions);
-                return;
-            }
+    // const updateText = useCallback(
+    //     (value) => {
+    //         setInputValue(value);
 
-            const filterRegex = new RegExp(value, 'i');
-            const resultOptions = deselectedOptions.filter((option) =>
-                option.label.match(filterRegex),
-            );
+    //         if (value === '') {
+    //             setOptions(deselectedOptions);
+    //             return;
+    //         }
 
-            let endIndex = resultOptions.length - 1;
-            if (resultOptions.length === 0) {
-                endIndex = 0;
-            }
-            setOptions(resultOptions);
-            setInputValue;
-        },
-        [deselectedOptions],
-    );
+    //         const filterRegex = new RegExp(value, 'i');
+    //         const resultOptions = deselectedOptions.filter((option) =>
+    //             option.label.match(filterRegex),
+    //         );
 
-    const textField = (
-        <Autocomplete.TextField
-            onChange={updateText}
-            label="Tags"
-            labelHidden
-            value={inputValue}
-            placeholder="Vintage, cotton, summer"
-        />
-    );
+    //         let endIndex = resultOptions.length - 1;
+    //         if (resultOptions.length === 0) {
+    //             endIndex = 0;
+    //         }
+    //         setOptions(resultOptions);
+    //         setInputValue;
+    //     },
+    //     [deselectedOptions],
+    // );
 
-    const hasSelectedOptions = selectedOptions.length > 0;
+    // const textField = (
+    //     <Autocomplete.TextField
+    //         onChange={updateText}
+    //         label="Tags"
+    //         labelHidden
+    //         value={inputValue}
+    //         placeholder="Vintage, cotton, summer"
+    //     />
+    // );
 
-    const tagsMarkup = hasSelectedOptions
-        ? selectedOptions.map((option) => {
-            let tagLabel = '';
-            tagLabel = option.replace('_', ' ');
-            tagLabel = titleCase(tagLabel);
-            return (
-                <Tag key={`option${option}`} onRemove={removeTag(option)}>
-                    {tagLabel}
-                </Tag>
-            );
-        })
-        : null;
-    const optionList = options.slice(0, visibleOptionIndex);
-    const selectedTagMarkup = hasSelectedOptions ? (
-        <Stack spacing="extraTight">{tagsMarkup}</Stack>
-    ) : null;
+    // const hasSelectedTags = optionProducts.value.values.length > 0;
+
+    // const tagsMarkup = hasSelectedTags
+    //     ? optionProducts.value.values.map((tag) => {
+    //         let tagLabel = '';
+    //         tagLabel = tag.replace('_', ' ');
+    //         tagLabel = titleCase(tagLabel);
+    //         return (
+    //             <Tag key={`option${tag}`} onRemove={removeTag(tag)}>
+    //                 {tagLabel}
+    //             </Tag>
+    //         );
+    //     })
+    //     : null;
+
+    // const selectedTagMarkup = hasSelectedTags ? (
+    //     <Stack spacing="extraTight">{tagsMarkup}</Stack>
+    // ) : null;
 
     return (
         <Stack vertical>
-            <Autocomplete
+            {/* <Autocomplete
                 actionBefore={{
                     accessibilityLabel: 'Destructive action label',
                     content: 'Add',
@@ -316,16 +243,14 @@ const ProductTags = () => {
                     },
                 }}
                 allowMultiple
-                options={optionList}
-                selected={selectedOptions}
+                options={tagsCopy.map(tag => ({ value: tag, label: tag }))}
+                selected={selectedTags}
                 textField={textField}
-                onSelect={setSelectedOptions}
-                listTitle="Suggested Tags"
+                onSelect={setSelectedTags}
                 loading={isLoading}
-                onLoadMoreResults={handleLoadMoreResults}
-                willLoadMoreResults={willLoadMoreResults}
+                listTitle="Suggested Tags"
             />
-            {selectedTagMarkup}
+            {selectedTagMarkup} */}
         </Stack>
     );
 

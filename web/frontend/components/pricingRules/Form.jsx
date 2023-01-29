@@ -7,7 +7,7 @@ import CustomPrices from './CustomPrices';
 import GeneralInfo from './GeneralInfo';
 
 function RulesForm() {
-    const { submitting, reset, dirty, submit } = useContext(PricingRulesObject);
+    const { reset, dirty, submit } = useContext(PricingRulesObject);
 
     return (
         <Form onSubmit={submit}>
@@ -15,14 +15,14 @@ function RulesForm() {
                 saveAction={{
                     label: "Save",
                     onAction: submit,
-                    loading: submitting,
-                    disabled: submitting,
+                    // loading: submitting,
+                    // disabled: submitting,
                 }}
                 discardAction={{
                     label: "Discard",
                     onAction: reset,
-                    loading: submitting,
-                    disabled: submitting,
+                    // loading: submitting,
+                    // disabled: submitting,
                 }}
                 visible={dirty}
                 fullWidth
