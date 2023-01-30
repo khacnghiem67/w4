@@ -1,19 +1,20 @@
-import { ResourcePicker } from '@shopify/app-bridge-react';
-import { Autocomplete, Avatar, Button, Card, ChoiceList, Icon, Stack, Tag, TextField } from "@shopify/polaris";
+import { ResourcePicker, unstable_Picker as Picker } from '@shopify/app-bridge-react';
+import { Autocomplete, Avatar, Button, Thumbnail, Card, ChoiceList, Icon, ResourceList, Stack, Tag, TextField } from "@shopify/polaris";
 import { CirclePlusMinor, MobileCancelMajor } from '@shopify/polaris-icons';
-import React, { useCallback, useContext, useState, useMemo } from 'react';
+import React, { useCallback, useContext, useState, useMemo, useEffect } from 'react';
 import { PricingRulesObject } from '../../contexts/PricingRules';
 import { useAppQuery } from '../../hooks';
 
 function ApplyProducts() {
     const [showResourcePickerProducts, setShowResourcePickerProducts] = useState(false);
-    const { optionProducts } = useContext(PricingRulesObject);
-
+    const { optionProducts, products } = useContext(PricingRulesObject);
+    const [initProducts, setInitProducts] = useState([])
     const toggleResourcePickerProducts = useCallback(
         () => setShowResourcePickerProducts(!showResourcePickerProducts),
         [showResourcePickerProducts]
     );
 
+    useEffect(() => { setInitProducts(products) }, [products])
 
     return (
         <Card sectioned title="Apply to Products">
@@ -28,21 +29,65 @@ function ApplyProducts() {
                             isSelected && (
                                 <>
                                     {showResourcePickerProducts &&
-                                        <ResourcePicker
-                                            resourceType="Product"
-                                            showVariants={false}
-                                            onCancel={toggleResourcePickerProducts}
-                                            // onSelection={handleProductsChange}
+                                        <Picker
                                             open
+                                            items={initProducts.map(({ id, title, image }) => ({ id, name: title, media: { kind: 'Thumbnail', source: image?.url || '', } }))}
+                                            selectedItems={optionProducts.value.values}
+                                            title="Select specific product"
+                                            searchQueryPlaceholder="Search product"
+                                            primaryActionLabel="Select"
+                                            secondaryActionLabel="Cancel"
+                                            emptySearchLabel={
+                                                {
+                                                    title: 'No resources',
+                                                    description: 'There are no resources to display',
+                                                    withIllustration: true,
+                                                }
+                                            }
+                                            onCancel={toggleResourcePickerProducts}
+                                            onSelect={(value) => {
+                                                optionProducts.onChange({ ...optionProducts.value, values: value.selectedItems })
+                                                toggleResourcePickerProducts()
+                                            }}
+                                            onSearch={(search) => setInitProducts(products.filter(product => product.title.includes(search.searchQuery)))}
                                         />
                                     }
-                                    <TextField
-                                        label="Search products"
-                                        labelHidden
-                                        onFocus={toggleResourcePickerProducts}
-                                        placeholder="Search products"
-                                        autoComplete="off"
-                                    />
+                                    <Stack vertical>
+                                        <Stack.Item>
+                                            <TextField
+                                                label="Search products"
+                                                labelHidden
+                                                onFocus={toggleResourcePickerProducts}
+                                                placeholder="Search products"
+                                                autoComplete="off"
+                                            />
+                                        </Stack.Item>
+
+                                        <Stack.Item>
+                                            <Stack vertical>
+                                                {optionProducts.value.values.map(({ id }) => {
+                                                    const product = products.find(product => product.id === id)
+                                                    return <Stack key={product?.id} alignment="center" distribution="fillEvenly">
+                                                        <Stack.Item>
+                                                            <Stack alignment="center">
+                                                                <Thumbnail source={product?.image.url || ''} />
+                                                                <p>
+                                                                    {product?.title}
+                                                                </p>
+                                                            </Stack>
+                                                        </Stack.Item>
+                                                        <Stack.Item>
+                                                            <Stack distribution='trailing'>
+                                                                <Button plain onClick={() => optionProducts.onChange({ ...optionProducts.value, values: optionProducts.value.values.filter(option => option.id !== id) })}>
+                                                                    <Icon source={MobileCancelMajor} color="subdued" />
+                                                                </Button>
+                                                            </Stack>
+                                                        </Stack.Item>
+                                                    </Stack>
+                                                })}
+                                            </Stack>
+                                        </Stack.Item>
+                                    </Stack>
                                 </>
                             ),
                     },
@@ -60,7 +105,9 @@ function ApplyProducts() {
                     },
                 ]}
                 selected={optionProducts.value.value}
-                onChange={(value) => optionProducts.onChange({ value, values: [] })}
+                onChange={(value) => {
+                    optionProducts.onChange({ value, values: [] })
+                }}
             />
         </Card>
     )
@@ -84,7 +131,8 @@ const ProductCollections = () => {
         },
     });
 
-    const updateText = useCallback(
+
+    const updateText =
         (value) => {
             setInputValue(value);
 
@@ -95,9 +143,7 @@ const ProductCollections = () => {
 
             const filterRegex = new RegExp(value, 'i');
             setCollections(initCollections.filter(collection => collection.title.match(filterRegex)))
-        },
-        [],
-    );
+        }
 
     const textField = (
         <Autocomplete.TextField
@@ -118,18 +164,16 @@ const ProductCollections = () => {
                 textField={textField}
                 loading={isLoading}
                 onSelect={(value) => {
-                    console.log(value)
                     optionProducts.onChange({ ...optionProducts.value, values: value })
                 }}
                 listTitle="Suggested Collections"
             />
             {optionProducts.value.values.map(id => {
                 const collection = collections.find(col => col.id === id)
-
                 return <Stack alignment="center" distribution="fillEvenly" key={id}>
                     <Stack.Item>
                         <Stack alignment="center">
-                            <Avatar name="Shop One" shape="square" source={collection?.image?.url} />
+                            <Thumbnail source={collection?.image?.url || ''} />
                             <p>
                                 {collection?.title}
                             </p>
@@ -161,96 +205,79 @@ const ProductTags = () => {
         url: '/api/tags', reactQueryOptions: {
             onSuccess: (data) => {
                 console.log('success');
-                console.log(data);
                 setIsLoading(false)
-                setTags(data.shop.productTags.edges.map(edge => edge.node));
-                setInitTags(data.shop.productTags.edges.map(edge => edge.node))
+                setTags(data.shop.productTags.edges.reduce((result, edge) => [...result, edge.node], []));
+                setInitTags(data.shop.productTags.edges.reduce((result, edge) => [...result, edge.node], []))
             },
         },
     });
 
-    // const removeTag = useCallback(
-    //     (tag) => () => {
-    //         const options = [...selectedOptions];
-    //         options.splice(options.indexOf(tag), 1);
-    //         setSelectedOptions(options);
-    //     },
-    //     [selectedOptions],
-    // );
+    const removeTag = useCallback(
+        (tag) => () => {
+            optionProducts.onChange({ ...optionProducts.value, values: optionProducts.value.values.filter(t => t !== tag) })
+        }, [optionProducts])
 
-    // const updateText = useCallback(
-    //     (value) => {
-    //         setInputValue(value);
 
-    //         if (value === '') {
-    //             setOptions(deselectedOptions);
-    //             return;
-    //         }
+    const updateText = useCallback(
+        (value) => {
+            setInputValue(value);
+        },
+        [],
+    );
 
-    //         const filterRegex = new RegExp(value, 'i');
-    //         const resultOptions = deselectedOptions.filter((option) =>
-    //             option.label.match(filterRegex),
-    //         );
+    const textField = (
+        <Autocomplete.TextField
+            onChange={updateText}
+            label="Tags"
+            labelHidden
+            value={inputValue}
+            placeholder="Vintage, cotton, summer"
+        />
+    );
 
-    //         let endIndex = resultOptions.length - 1;
-    //         if (resultOptions.length === 0) {
-    //             endIndex = 0;
-    //         }
-    //         setOptions(resultOptions);
-    //         setInputValue;
-    //     },
-    //     [deselectedOptions],
-    // );
+    const hasSelectedTags = optionProducts.value.values.length > 0;
 
-    // const textField = (
-    //     <Autocomplete.TextField
-    //         onChange={updateText}
-    //         label="Tags"
-    //         labelHidden
-    //         value={inputValue}
-    //         placeholder="Vintage, cotton, summer"
-    //     />
-    // );
+    const tagsMarkup = hasSelectedTags
+        ? optionProducts.value.values.map((tag) => {
+            let tagLabel = '';
+            tagLabel = tag.replace('_', ' ');
+            tagLabel = titleCase(tagLabel);
+            return (
+                <Tag key={tag} onRemove={removeTag(tag)}>
+                    {tagLabel}
+                </Tag>
+            );
+        })
+        : null;
 
-    // const hasSelectedTags = optionProducts.value.values.length > 0;
-
-    // const tagsMarkup = hasSelectedTags
-    //     ? optionProducts.value.values.map((tag) => {
-    //         let tagLabel = '';
-    //         tagLabel = tag.replace('_', ' ');
-    //         tagLabel = titleCase(tagLabel);
-    //         return (
-    //             <Tag key={`option${tag}`} onRemove={removeTag(tag)}>
-    //                 {tagLabel}
-    //             </Tag>
-    //         );
-    //     })
-    //     : null;
-
-    // const selectedTagMarkup = hasSelectedTags ? (
-    //     <Stack spacing="extraTight">{tagsMarkup}</Stack>
-    // ) : null;
+    const selectedTagMarkup = hasSelectedTags ? (
+        <Stack spacing="extraTight">{tagsMarkup}</Stack>
+    ) : null;
 
     return (
         <Stack vertical>
-            {/* <Autocomplete
+            <Autocomplete
                 actionBefore={{
                     accessibilityLabel: 'Destructive action label',
                     content: 'Add',
                     icon: CirclePlusMinor,
                     onAction: () => {
-                        console.log('actionBefore clicked!');
+                        if (inputValue.trim().length === 0) return
+                        if (optionProducts.value.values.some(tag => tag === inputValue.trim())) return
+
+                        optionProducts.onChange({ ...optionProducts.value, values: [...optionProducts.value.values, inputValue.trim()] })
+                        setInputValue('')
                     },
                 }}
                 allowMultiple
-                options={tagsCopy.map(tag => ({ value: tag, label: tag }))}
-                selected={selectedTags}
+                options={tags.map(tag => ({ value: tag, label: tag }))}
+                selected={optionProducts.value.values}
                 textField={textField}
-                onSelect={setSelectedTags}
+                onSelect={(value) => optionProducts.onChange({ ...optionProducts.value, values: value })}
                 loading={isLoading}
                 listTitle="Suggested Tags"
             />
-            {selectedTagMarkup} */}
+            {selectedTagMarkup}
         </Stack>
     );
 

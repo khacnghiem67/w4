@@ -1,30 +1,30 @@
 import { Button, Card, DataTable, Layout, Page, Stack } from "@shopify/polaris";
-import React from 'react';
+import React, { useContext } from 'react';
 import Form from '../../components/pricingRules/Form';
 
-import PricingRulesContext from '../../contexts/PricingRules';
+import PricingRulesContext, { PricingRulesObject } from '../../contexts/PricingRules';
 
 
 function NewPricingRule() {
 
     return (
-        <Page fullWidth title='New Pricing Rule'>
-            <Layout>
-                <Layout.Section>
-                    <PricingRulesContext>
+        <PricingRulesContext>
+            <Page fullWidth title='New Pricing Rule'>
+                <Layout>
+                    <Layout.Section>
                         <Form />
-                    </PricingRulesContext>
-                </Layout.Section>
-                <Layout.Section oneHalf>
-                    <Card sectioned>
-                        <Stack vertical>
-                            <Button outline fullWidth>Show product pricing details</Button>
-                            {/* <DataTableExample /> */}
-                        </Stack>
-                    </Card>
-                </Layout.Section>
-            </Layout>
-        </Page>
+                    </Layout.Section>
+                    <Layout.Section oneHalf>
+                        <Card sectioned>
+                            <Stack vertical>
+                                <Button outline fullWidth>Show product pricing details</Button>
+                                <DataTableExample />
+                            </Stack>
+                        </Card>
+                    </Layout.Section>
+                </Layout>
+            </Page>
+        </PricingRulesContext>
     )
 }
 
@@ -33,36 +33,42 @@ export default NewPricingRule
 
 
 function DataTableExample() {
-    const rows = [
-        ['Emerald Silk Gown', '$875.00', 124689, 140, '$122,500.00'],
-        ['Mauve Cashmere Scarf', '$230.00', 124533, 83, '$19,090.00'],
-        [
-            'Navy Merino Wool Blazer with khaki chinos and yellow belt',
-            '$445.00',
-            124518,
-            32,
-            '$14,240.00',
-        ],
-    ];
+    const { productPricingList } = useContext(PricingRulesObject)
+    // const rows = [
+    //     ['Emerald Silk Gown', '$875.00', 124689, 140, '$122,500.00'],
+    //     ['Mauve Cashmere Scarf', '$230.00', 124533, 83, '$19,090.00'],
+    //     [
+    //         'Navy Merino Wool Blazer with khaki chinos and yellow belt',
+    //         '$445.00',
+    //         124518,
+    //         32,
+    //         '$14,240.00',
+    //     ],
+    // ];
+    const rows = productPricingList.reduce((result, { id, productsRule }) => [...result, ...productsRule], []).map(({ name, title, price, discountPrice }) => {
+        return [
+            name,
+            title, price, discountPrice
+        ];
+    }
+    )
 
     return (
         <DataTable
             columnContentTypes={[
                 'text',
-                'numeric',
-                'numeric',
+                'text',
                 'numeric',
                 'numeric',
             ]}
             headings={[
+                'Rule',
                 'Product',
                 'Price',
-                'SKU Number',
-                'Net quantity',
-                'Net sales',
+                'Discount price',
             ]}
             rows={rows}
-            totals={['', '', '', 255, '$155,830.00']}
+        // totals={['', '', 255, 255]}
         />
     );
 }

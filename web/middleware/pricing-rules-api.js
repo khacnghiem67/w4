@@ -20,13 +20,21 @@ import {
 const NUM = 15;
 
 const PRODUCTS_QUERY = `
- {
+  {
     products(first: 10) {
       edges {
         node {
           id
           title
           tags
+          variants(first: 1) {
+            edges {
+              node {
+                id
+                price
+              }
+            }
+          }
           images(first: 1) {
             edges {
               node {
@@ -57,23 +65,6 @@ const COLLECTIONS_QUERY = `
             id
             url
           }
-          products(first: 10) {
-            edges {
-              node {
-                id
-                title
-                tags
-                images(first: 1) {
-                  edges {
-                    node {
-                      id
-                      url
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -92,8 +83,34 @@ const TAGS_QUERY = `
   }
 `;
 
+const CURRENCY_CODE_QUERY = `
+  {
+    shop {
+      currencyCode
+    }
+  }
+`
+
 export default function applyPricingRulesApiEndpoints(app) {
   app.use(express.json());
+
+  // currency code
+  // app.get("/api/currency_code", async (_req, res) => {
+  //   const client = new shopify.api.clients.Graphql({
+  //     session: res.locals.shopify.session,
+  //   });
+
+  //   const currency = await client.query({
+  //     data: {
+  //       query: CURRENCY_CODE_QUERY,
+  //       variables: {
+  //         first: 25,
+  //       },
+  //     },
+  //   });
+
+  //   res.send(currency.body.data);
+  // });
 
   // products
   app.get("/api/products", async (_req, res) => {
